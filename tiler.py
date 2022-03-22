@@ -1,6 +1,8 @@
 from PIL import Image
 import os.path
+import argparse
 from functools import partial
+import yaml
 
 def byte_combiner():
     last = None
@@ -89,7 +91,6 @@ def create_sprites(image_name):
 
         image = base_image.crop((x * segment_width, y * segment_height, (x+1) * segment_width, (y+1) * segment_height))
 
-        image.save(f"./tile{digit}.png")
         img_byte_arr = []
         for y in range(0, image.height):
             for x in range(0, image.width):
@@ -111,33 +112,54 @@ def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
-def create_header_file(filename):
-    with open("./tiles.rs", "w") as f:
-        palette, sprites = create_sprites(filename)
-        pal_str = ",".join(["0x{:X}".format(x) for x in palette])
+def create_header_file(levels, outfile):
+    with open(outfile, "w") as f:
+        f.write("pub struct Level<'a> {\n")
+        f.write("   pub name: &'a str,\n")
+        f.write("   pub palette: &'a [u32; 4],\n")
+        f.write("   pub tiles: &'a [&'a [u8; 324]; 16],\n")
+        f.write("}\n")
 
-        base_name = os.path.basename(filename).split(".")[0]
+        level_names = []
+        for level in levels:
+            filename = level["image"]
 
-        f.write(f"pub const {base_name.upper()}_PALETTE: [u32; 4] = [{pal_str}];\n")
+            palette, sprites = create_sprites(filename)
+            pal_str = ",".join(["0x{:X}".format(x) for x in palette])
 
-        names = []
+            base_name = os.path.basename(filename).split(".")[0]
+            level_names.append((base_name.upper(), level["name"]))
+            f.write(f"pub const {base_name.upper()}_PALETTE: [u32; 4] = [{pal_str}];\n\n")
 
-        for (array_name, img_arr) in sprites:
-            array_name = f"{base_name}{array_name}"
-            names.append(array_name.upper())
-            f.write(f"pub const {array_name.upper()}: [u8; {len(img_arr)}] = [\n")
-            strs = []
-            for chunk in chunks(img_arr, 16):
-                strs.append(",".join(["0x{:02X}".format(x) for x in chunk]) + ",")
-            strs[-1] = strs[-1][:-1]
-            for str in strs:
-                f.write(str + "\n")
-            f.write("]; \n")
+            names = []
 
-        f.write(f"pub const {base_name.upper()}: [&[u8]; {len(names)}] = [\n")
-        for name in names:
-            f.write(f"    &{name},\n")
+            for (array_name, img_arr) in sprites:
+                array_name = f"{base_name}{array_name}"
+                names.append(array_name.upper())
+                f.write(f"pub const {array_name.upper()}: [u8; {len(img_arr)}] = [\n")
+                strs = []
+                for chunk in chunks(img_arr, 16):
+                    strs.append(",".join(["0x{:02X}".format(x) for x in chunk]) + ",")
+                strs[-1] = strs[-1][:-1]
+                for str in strs:
+                    f.write(str + "\n")
+                f.write("];\n\n")
+
+            f.write(f"pub const {base_name.upper()}: [&[u8; 324]; {len(names)}] = [\n")
+            for name in names:
+                f.write(f"    &{name},\n")
+            f.write("];\n\n")
+        f.write(f"pub const ALL_LEVELS: [Level; {len(levels)}] = [\n")
+        for name, level_name in level_names:
+            f.write(f'    Level{{tiles: &{name}, palette: &{name}_PALETTE, name: "{level_name}"}},\n')
         f.write("];\n")
 
 if __name__ == '__main__':
-    create_header_file("./frye_small_color.png")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file")
+    args = parser.parse_args()
+
+    with open(args.file) as f:
+        input = yaml.safe_load(f)
+
+        create_header_file(input["levels"], input["output"])

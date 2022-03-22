@@ -1,0 +1,13 @@
+levels:
+  - name: "Fall Out Boy"
+    image: "fall_out_boy.png"
+  - name: "Mondrian"
+    image: "mondrian_small.png"
+  - name: "Leaves"
+    image: "leaves.png"
+  # - name: "Talking Heads"
+  #   image: "talking_heads.png"
+  - name: "Author"
+    image: "frye_small_color.png"
+
+output: "/home/frye/dev/hello-world/src/tiles.rs"
